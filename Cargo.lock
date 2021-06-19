@@ -77,6 +77,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pi-weather-station"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "crossbeam-channel",
+ "rppal",
+]
+
+[[package]]
 name = "rppal"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -84,15 +93,6 @@ checksum = "eb26758c881b4837b2f4aef569e4251f75388e36b37204e1804ef429c220121c"
 dependencies = [
  "lazy_static",
  "libc",
-]
-
-[[package]]
-name = "rust-gpio-testing"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "crossbeam-channel",
- "rppal",
 ]
 
 [[package]]

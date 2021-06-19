@@ -38,9 +38,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut led_pin = Gpio::new()?.get(15)?.into_output();
     let mut button_led = Gpio::new()?.get(24)?.into_output();
 
-    let mut anemometer = Anemometer::new(Gpio::new()?.get(8)?.into_input(), tx.clone(), payload_tx.clone());
+    // let mut anemometer = Anemometer::new(Gpio::new()?.get(8)?.into_input(), tx.clone(), payload_tx.clone());
 
-    anemometer.start();
+    // anemometer.start();
 
     let manager = DataManager::new(tx.clone(), payload_rx.clone());
 
