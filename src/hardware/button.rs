@@ -5,6 +5,7 @@ use chrono::{ DateTime };
 use chrono::offset::{ Utc };
 
 use super::events::{ Event, EventType, Payload };
+use crate::data::process::{ DataPoint };
 
 #[derive(Debug, Clone, Copy)]
 pub struct IncrementalPayload {
@@ -26,6 +27,10 @@ impl Payload for IncrementalPayload {
         let time: DateTime<Utc> = self.last_updated.into();
 
         println!("Received Button Payload --- {} CPS, Last Updated: {}", self.presses_per_sec, time.format("%d/%m/%Y %T").to_string());
+    }
+
+    fn update_data_fields(&self, data: &mut DataPoint) {
+        data.update_message(format!("Received Button Payload --- {} CPS", self.presses_per_sec).to_string());
     }
 }
 

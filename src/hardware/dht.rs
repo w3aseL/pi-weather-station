@@ -8,6 +8,66 @@ use crossbeam_channel::{ Sender };
 use crate::hardware::events::{ Event, EventType, Payload };
 use chrono::{ DateTime };
 use chrono::offset::{ Utc };
+use crate::data::process::{ DataPoint };
+
+#[derive(Debug, Clone, Copy)]
+pub struct DHTData {
+    temperature: f32,
+    humidity: f32,
+    last_updated: Option<SystemTime>
+}
+
+impl DHTData {
+    pub fn new(temp: f32, humidity: f32, last_updated: Option<SystemTime>) -> Self {
+        Self {
+            temperature: temp,
+            humidity,
+            last_updated
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.last_updated.is_some()
+    }
+
+    pub fn get_temp_celsius(&self) -> f32 {
+        self.temperature
+    }
+
+    pub fn get_temp_farenheit(&self) -> f32 {
+        self.get_temp_celsius() * 9.0 / 5.0 + 32.0
+    }
+
+    pub fn get_humidity(&self) -> f32 {
+        self.humidity
+    }
+
+    pub fn get_last_updated(&self) -> Option<SystemTime> {
+        self.last_updated
+    }
+}
+
+pub struct DHTPayload {
+    data: DHTData
+}
+
+impl DHTPayload {
+    pub fn new(temp: f32, humidity: f32, last_updated: Option<SystemTime>) -> Self {
+        DHTPayload {
+            data: DHTData::new(temp, humidity, last_updated)
+        }
+    }
+}
+
+impl Payload for DHTPayload {
+    fn send_message(&self) {
+        // ...
+    }
+
+    fn update_data_fields(&self, data: &mut DataPoint) {
+        data.update_dht(self.data.clone())
+    }
+}
 
 const PI_CLOCK: u64 = 1_500_000_000;
 
@@ -78,13 +138,14 @@ impl DHT {
             loop {
                 match self.update() {
                     Ok(_) => {
-                        println!("Temperature: {}°F ({}°C)", self.get_temp_farenheit(), self.get_temp_celsius());
-                        println!("Humidity: {}%", self.get_humidity());
+                        //println!("Temperature: {}°F ({}°C)", self.get_temp_farenheit(), self.get_temp_celsius());
+                        //println!("Humidity: {}%", self.get_humidity());
                         success_counter += 1;
 
                         self.last_update = Some(SystemTime::now());
 
                         self.event_sender.send(Event::new(EventType::SensorRead)).unwrap();
+                        self.payload_sender.send(Box::new(DHTPayload::new(self.temp, self.humidity, self.last_update)));
                     }
                     Err(code) => {
                         println!("Failed to read from sensor! Code: {}", DHTState::get_state_str(DHTState::get_state_from_code(code)));
@@ -107,6 +168,8 @@ impl DHT {
 
                 sleep(Duration::from_secs(2));
             }
+
+            sleep(Duration::from_secs(10));
 
             self.event_sender.send(Event::new(EventType::Exit)).unwrap();
         });

@@ -1,4 +1,4 @@
-use std::iter::Empty;
+use crate::data::process::{ DataPoint };
 
 #[derive(Debug, Clone, Copy)]
 pub enum EventType {
@@ -30,6 +30,7 @@ impl Event {
 
 pub trait Payload: Send {
     fn send_message(&self);
+    fn update_data_fields(&self, data: &mut DataPoint);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -44,5 +45,9 @@ impl EmptyPayload {
 impl Payload for EmptyPayload {
     fn send_message(&self) {
         println!("Printing empty payload!");
+    }
+
+    fn update_data_fields(&self, data: &mut DataPoint) {
+        data.update_message("New message sent!".to_string());
     }
 }
