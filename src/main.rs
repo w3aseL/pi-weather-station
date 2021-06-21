@@ -6,9 +6,11 @@ mod hardware;
 mod data;
 
 use hardware::dht::{ DHT, DHTSensor };
-use hardware::button::{ Button };
+//use hardware::button::{ Button };
 use hardware::events::{ EventType };
 use hardware::anemometer::{ Anemometer };
+use hardware::analog::{ MCP3008 };
+use hardware::vane::{ WindVane };
 
 use data::process::{ DataManager };
 
@@ -17,30 +19,31 @@ use std::time::{ Duration };
 use std::thread::{ sleep };
 
 use rppal::gpio::{ Gpio, Mode };
+use rppal::spi::{ Bus, SlaveSelect, Mode as SPIMode };
 use crossbeam_channel as channel;
+
+const DHT_PIN: u8 = 14;
+const ANEMOMETER_PIN: u8 = 5;
+const RAIN_PIN: u8 = 6;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let (tx, rx) = channel::unbounded();
     let (payload_tx, payload_rx) = channel::unbounded();
 
-    let dht_sensor = DHT::new(Gpio::new()?.get(18)?.into_io(Mode::Input), DHTSensor::DHT11, tx.clone(), payload_tx.clone());
+    let dht_sensor = DHT::new(Gpio::new()?.get(DHT_PIN)?.into_io(Mode::Input), DHTSensor::DHT11, tx.clone(), payload_tx.clone());
     
     dht_sensor.start_reading();
 
-    println!("Starting button async task!");
+    // let mut button = Button::new(Gpio::new()?.get(23)?.into_input(), tx.clone(), payload_tx.clone());
 
-    let mut button = Button::new(Gpio::new()?.get(23)?.into_input(), tx.clone(), payload_tx.clone());
+    // let mut led_pin = Gpio::new()?.get(15)?.into_output();
+    // let mut button_led = Gpio::new()?.get(24)?.into_output();
 
-    button.start();
+    let anemometer = Anemometer::new(Gpio::new()?.get(ANEMOMETER_PIN)?.into_input(), payload_tx.clone());
 
-    println!("Starting LED output pin!");
+    anemometer.start();
 
-    let mut led_pin = Gpio::new()?.get(15)?.into_output();
-    let mut button_led = Gpio::new()?.get(24)?.into_output();
-
-    // let mut anemometer = Anemometer::new(Gpio::new()?.get(8)?.into_input(), tx.clone(), payload_tx.clone());
-
-    // anemometer.start();
+    let mut wind_vane = WindVane::new(MCP3008::new(Bus::Spi0, SlaveSelect::Ss0, 1000000u32, SPIMode::Mode0), 0, payload_tx.clone());
 
     let manager = DataManager::new(tx.clone(), payload_rx.clone());
 
@@ -50,25 +53,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         if let Ok(event) = rx.try_recv() {
             match event.get_event_type() {
                 EventType::SensorRead => {
-                    led_pin.set_high();
+                    // led_pin.set_high();
                     sleep(Duration::from_millis(100));
-                    led_pin.set_low();
+                    // led_pin.set_low();
                 },
                 EventType::ButtonPress => {
-                    button.increment_counter();
-                    button_led.set_high();
+                    // button.increment_counter();
+                    // button_led.set_high();
                     sleep(Duration::from_millis(20));
                 },
                 EventType::ButtonRelease => {
-                    button_led.set_low();
+                    // button_led.set_low();
                     sleep(Duration::from_millis(20));
                 },
                 EventType::AnemometerCount => {
                     // anemometer.increment_counter();
                 },
                 EventType::UpdateData => {
-                    button.update_data();
-                    // anemometer.update_data();
+                    // button.update_data();
+                    wind_vane.update_data();
                 },
                 EventType::Exit => {
                     println!("Exiting program!");

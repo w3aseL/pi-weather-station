@@ -5,9 +5,10 @@ use rppal::gpio::{ IoPin, Mode, PullUpDown };
 use std::thread::{ sleep, spawn };
 use std::time::{ Duration, SystemTime };
 use crossbeam_channel::{ Sender };
-use crate::hardware::events::{ Event, EventType, Payload };
 use chrono::{ DateTime };
 use chrono::offset::{ Utc };
+
+use crate::hardware::events::{ Event, EventType, Payload };
 use crate::data::process::{ DataPoint };
 
 #[derive(Debug, Clone, Copy)]
@@ -100,7 +101,7 @@ impl DHTState {
 }
 
 #[derive(Debug, Clone, Copy)]
-#[warn(dead_code)]
+#[allow(dead_code)]
 pub enum DHTSensor {
     DHT11 = 18,
     DHT22 = 1
@@ -145,7 +146,7 @@ impl DHT {
                         self.last_update = Some(SystemTime::now());
 
                         self.event_sender.send(Event::new(EventType::SensorRead)).unwrap();
-                        self.payload_sender.send(Box::new(DHTPayload::new(self.temp, self.humidity, self.last_update)));
+                        self.payload_sender.send(Box::new(DHTPayload::new(self.temp, self.humidity, self.last_update))).unwrap();
                     }
                     Err(code) => {
                         println!("Failed to read from sensor! Code: {}", DHTState::get_state_str(DHTState::get_state_from_code(code)));
@@ -248,17 +249,5 @@ impl DHT {
         }
 
         return DHTState::Ok as i32;
-    }
-
-    pub fn get_temp_celsius(&self) -> f32 {
-        self.temp
-    }
-
-    pub fn get_temp_farenheit(&self) -> f32 {
-        self.get_temp_celsius() * 9.0 / 5.0 + 32.0
-    }
-
-    pub fn get_humidity(&self) -> f32 {
-        self.humidity
     }
 }
