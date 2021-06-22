@@ -6,7 +6,6 @@ pub enum EventType {
     ButtonPress,
     ButtonRelease,
     UpdateData,
-    ReceiveData,
     AnemometerCount,
     RainCount,
     Exit
