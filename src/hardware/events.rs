@@ -8,6 +8,7 @@ pub enum EventType {
     UpdateData,
     ReceiveData,
     AnemometerCount,
+    RainCount,
     Exit
 }
 

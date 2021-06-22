@@ -2,24 +2,23 @@ use rppal::gpio::{ InputPin, Trigger };
 use std::time::{ SystemTime };
 use crossbeam_channel::{ Sender };
 
-use super::events::{ Event, Payload, EventType };
+use super::events::{ Payload, Event, EventType };
 use crate::data::process::{ DataPoint };
 
-const CM_TO_KM: f32 = 100000.0;
-const SEC_TO_HR: f32 = 3600.0;
-const KM_TO_MI: f32 = 1.609344;
-const WIND_ADJUSTMENT: f32 = 1.18;
+const COUNT_TO_MM: f32 = 0.2794;
+const CM_TO_MM: f32 = 10.0;
+const CM_TO_IN: f32 = 2.54;
 
 #[derive(Debug, Clone, Copy)]
-pub struct AnemometerData {
-    spins_per_sec: f32,
+pub struct RainData {
+    ticks_per_sec: f32,
     last_updated: Option<SystemTime>
 }
 
-impl AnemometerData {
-    pub fn new(spins_per_sec: f32, last_updated: Option<SystemTime>) -> Self {
+impl RainData {
+    pub fn new(ticks_per_sec: f32, last_updated: Option<SystemTime>) -> Self {
         Self {
-            spins_per_sec,
+            ticks_per_sec,
             last_updated
         }
     }
@@ -32,58 +31,54 @@ impl AnemometerData {
         self.last_updated
     }
 
-    fn get_cm_per_sec(&self) -> f32 {
-        (self.spins_per_sec / 2.0) * ((2.0 * std::f32::consts::PI) * 9.0)
+    pub fn get_amount_cm(&self) -> f32 {
+        (self.ticks_per_sec / COUNT_TO_MM) / CM_TO_MM
     }
 
-    pub fn get_kph(&self) -> f32{
-        (self.get_cm_per_sec() / CM_TO_KM) * SEC_TO_HR * WIND_ADJUSTMENT
-    }
-
-    pub fn get_mph(&self) -> f32 {
-        self.get_kph() / KM_TO_MI
+    pub fn get_amount_in(&self) -> f32 {
+        self.get_amount_cm() / CM_TO_IN
     }
 }
 
-pub struct AnemometerPayload {
-    data: AnemometerData
+pub struct RainPayload {
+    data: RainData
 }
 
-impl AnemometerPayload {
-    pub fn new(spins_per_sec: f32, last_updated: Option<SystemTime>) -> Self {
+impl RainPayload {
+    pub fn new(ticks_per_sec: f32, last_updated: Option<SystemTime>) -> Self {
         Self {
-            data: AnemometerData::new(spins_per_sec, last_updated)
+            data: RainData::new(ticks_per_sec, last_updated)
         }
     }
 }
 
-impl Payload for AnemometerPayload {
+impl Payload for RainPayload {
     fn send_message(&self) {
         // ...
     }
 
     fn update_data_fields(&self, data: &mut DataPoint) {
-        data.update_anemometer(self.data.clone());
+        data.update_rain(self.data.clone());
     }
 }
 
-pub struct Anemometer {
+pub struct RainMeter {
     pin: InputPin,
     sender: Sender<Event>,
     payload_sender: Sender<Box<dyn Payload>>,
     counter: i32,
-    spins_per_sec: f32,
+    ticks_per_sec: f32,
     last_updated: SystemTime
 }
 
-impl Anemometer {
+impl RainMeter {
     pub fn new(pin: InputPin, sender: Sender<Event>, payload_sender: Sender<Box<dyn Payload>>) -> Self {
         Self {
             pin,
             sender,
             payload_sender,
             counter: 0,
-            spins_per_sec: 0.0,
+            ticks_per_sec: 0.0,
             last_updated: SystemTime::now()
         }
     }
@@ -92,7 +87,7 @@ impl Anemometer {
         let copy_sender = self.sender.clone();
 
         self.pin.set_async_interrupt(Trigger::RisingEdge, move |_| {
-            copy_sender.send(Event::new(EventType::AnemometerCount)).unwrap();
+            copy_sender.send(Event::new(EventType::RainCount)).unwrap();
         }).unwrap();
     }
 
@@ -103,10 +98,10 @@ impl Anemometer {
     pub fn update_data(&mut self) {
         let time_elapsed = self.last_updated.elapsed().unwrap().as_millis();
 
-        self.spins_per_sec = self.counter as f32 / (time_elapsed as f32 / 1000.0);
+        self.ticks_per_sec = self.counter as f32 / (time_elapsed as f32 / 1000.0);
         self.counter = 0;
         self.last_updated = SystemTime::now();
 
-        self.payload_sender.send(Box::new(AnemometerPayload::new(self.spins_per_sec, Some(self.last_updated)))).unwrap();
+        self.payload_sender.send(Box::new(RainPayload::new(self.ticks_per_sec, Some(self.last_updated)))).unwrap();
     }
 }
