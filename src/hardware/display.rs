@@ -47,6 +47,7 @@ const ROW_OFFSETS: [u8; 4] = [ 0x00, 0x40, 0x14, 0x54 ];
 
 pub struct LCDAsciiConverter {}
 
+// https://www.engineersgarage.com/wp-content/uploads/2/2/1/5/22159166/7547888_orig.jpg
 impl LCDAsciiConverter {
     pub fn to_ascii(ch: char) -> u8 {
         match ch {
