@@ -1,5 +1,6 @@
 // Credit where credit's due for sensor:
 // https://github.com/jackmead515/rust_dht11/blob/master/src/dht11.rs
+// https://github.com/RobTillaart/DHTstable/blob/master/DHTStable.cpp
 
 use rppal::gpio::{ IoPin, Mode, PullUpDown };
 use std::thread::{ sleep, spawn };
@@ -10,6 +11,8 @@ use chrono::offset::{ Utc };
 
 use crate::hardware::events::{ Event, EventType, Payload };
 use crate::data::process::{ DataPoint };
+
+const MAX_CLOCKS: u32 = 32_000;
 
 #[derive(Debug, Clone, Copy)]
 pub struct DHTData {
@@ -70,8 +73,6 @@ impl Payload for DHTPayload {
     }
 }
 
-const PI_CLOCK: u64 = 1_500_000_000;
-
 pub enum DHTState {
     Ok = 0,
     ErrorChecksum = -1,
@@ -100,16 +101,8 @@ impl DHTState {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
-pub enum DHTSensor {
-    DHT11 = 18,
-    DHT22 = 1
-}
-
 pub struct DHT {
     pin: IoPin,
-    sensor_type: DHTSensor,
     humidity: f32,
     temp: f32,
     event_sender: Sender<Event>,
@@ -118,10 +111,9 @@ pub struct DHT {
 }
 
 impl DHT {
-    pub fn new(pin: IoPin, sensor_type: DHTSensor, event_sender: Sender<Event>, payload_sender: Sender<Box<dyn Payload>>) -> Self {
+    pub fn new(pin: IoPin, event_sender: Sender<Event>, payload_sender: Sender<Box<dyn Payload>>) -> Self {
         Self {
             pin,
-            sensor_type,
             humidity: 0.0,
             temp: 0.0,
             event_sender,
@@ -145,7 +137,6 @@ impl DHT {
 
                         self.last_update = Some(SystemTime::now());
 
-                        self.event_sender.send(Event::new(EventType::SensorRead)).unwrap();
                         self.payload_sender.send(Box::new(DHTPayload::new(self.temp, self.humidity, self.last_update))).unwrap();
                     }
                     Err(code) => {
@@ -177,7 +168,7 @@ impl DHT {
     }
 
     fn update(&mut self) -> Result<(), i32> {
-        let read_ret = self.read_sensor(self.sensor_type as u8);
+        let read_ret = self.read_sensor();
 
         if read_ret != DHTState::Ok as i32 {
             self.humidity = (DHTState::InvalidValue as i32) as f32;
@@ -188,35 +179,39 @@ impl DHT {
         Ok(())
     }
 
-    fn read_sensor(&mut self, wake_up_delay: u8) -> i32 {
+    fn read_sensor(&mut self) -> i32 {
+        let mut mask = 128u8;
+        let mut idx = 0;
+
         // Startup
         self.pin.set_mode(Mode::Output);
         self.pin.set_high();
         sleep(Duration::from_millis(100));
         self.pin.set_low();
-        sleep(Duration::from_millis(wake_up_delay as u64 + 2));
-        self.pin.set_high();
-        sleep(Duration::from_micros(30));
+        sleep(Duration::from_micros(1100));
         self.pin.set_mode(Mode::Input);
-
-        // Max clock speed
-        let max_count = (PI_CLOCK / 40000) as u32;
+        self.pin.set_pullupdown(PullUpDown::PullUp);
+        sleep(Duration::from_micros(30));
 
         const PULSES: usize = 41;
+        let mut data = [0u8; 5];
 
+        /*
         let mut pulse_cnts = [0u32; PULSES*2];
         
         for i in (0..PULSES*2).step_by(2) {
             while self.pin.is_low() {
                 pulse_cnts[i] += 1;
-    
-                if pulse_cnts[i] >= max_count { return DHTState::ErrorTimeout as i32; }
+                if pulse_cnts[i] >= MAX_CLOCKS {
+                    return DHTState::ErrorTimeout as i32; // Exceeded timeout, fail.
+                }
             }
 
             while self.pin.is_high() {
                 pulse_cnts[i+1] += 1;
-    
-                if pulse_cnts[i+1] >= max_count { return DHTState::ErrorTimeout as i32; }
+                if pulse_cnts[i+1] >= MAX_CLOCKS {
+                    return DHTState::ErrorTimeout as i32; // Exceeded timeout, fail.
+                }
             }
         }
 
@@ -226,8 +221,6 @@ impl DHT {
         }
         threshold /= PULSES as u32 - 1;
 
-        let mut data = [0u8; 5];
-
         for i in (3..PULSES * 2).step_by(2) {
             let idx = (i - 3) / 16;
             data[idx] <<= 1;
@@ -236,18 +229,102 @@ impl DHT {
                 data[idx] |= 1;
             }
         }
+        */
 
-        self.humidity = (data[0] as f32) + ((data[1] as f32) * 0.1);
-        self.temp = (data[2] as f32) + ((data[3] as f32) * 0.1);
+        let mut count = MAX_CLOCKS;
+        while self.pin.is_low() {
+            count -= 1;
+            if count == 0 { return DHTState::ErrorTimeout as i32; }
+        }
+
+        count = MAX_CLOCKS;
+        while self.pin.is_high() {
+            count -= 1;
+            if count == 0 { return DHTState::ErrorTimeout as i32; }
+        }
+
+        for _ in 0..PULSES-1 {
+            count = MAX_CLOCKS;
+                while self.pin.is_low() {
+                count -= 1;
+                if count == 0 { return DHTState::ErrorTimeout as i32; }
+            }
+
+            let time = SystemTime::now();
+
+            count = MAX_CLOCKS;
+            while self.pin.is_high() {
+                count -= 1;
+                if count == 0 { return DHTState::ErrorTimeout as i32; }
+            }
+
+            if time.elapsed().unwrap().as_micros() > 40 {
+                data[idx] |= mask;
+            }
+
+            mask >>= 1;
+            if mask == 0 {
+                mask = 128;
+                idx += 1;
+            }
+        }
+
+        self.humidity = ((data[0] as i16) << 8 | (data[1] as i16)) as f32 * 0.1;
+        self.temp = ((data[2] as i16) * 256 + (data[3] as i16)) as f32 * 0.1;
 
         let mut checksum = 0u8;
 
-        for i in 0..4 { checksum += data[i] }
+        // println!("Data bits: {:?}, humidity: {:.2}, temp: {:.2}", data, self.humidity, self.temp);
+
+        for i in 0..4 {
+            match checksum.checked_add(data[i]) {
+                Some(val) => checksum = val,
+                None => return DHTState::ErrorChecksum as i32
+            }
+        }
 
         if checksum != data[4] {
             return DHTState::ErrorChecksum as i32;
         }
 
         return DHTState::Ok as i32;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::error::Error;
+    use std::thread::sleep;
+    use std::time::Duration;
+    use rppal::gpio::{ Gpio };
+    use crate::{ DHT, DHT_PIN, Mode };
+    use crate::hardware::dht::{ DHTState };
+    use crossbeam_channel as channel;
+
+    #[test]
+    fn test_temp() -> Result<(), Box<dyn Error>> {
+        let (tx, _) = channel::unbounded();
+        let (payload_tx, _) = channel::unbounded();
+
+        let mut dht_sensor = DHT::new(Gpio::new()?.get(DHT_PIN)?.into_io(Mode::Input), tx.clone(), payload_tx.clone());
+
+        let mut success = 0;
+
+        for _ in 0..5 {
+            match dht_sensor.update() {
+                Ok(_) => {
+                    success += 1;
+                },
+                Err(code) => {
+                    println!("Failed to read from sensor! Code: {}", DHTState::get_state_str(DHTState::get_state_from_code(code)));
+                }
+            }
+
+            sleep(Duration::from_secs(2));
+        }
+
+        assert!(success == 5, "Test Results: {}-{} Success/Fail Ratio", success, 5 - success);
+
+        Ok(())
     }
 }

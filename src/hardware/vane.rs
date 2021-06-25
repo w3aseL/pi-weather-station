@@ -17,6 +17,13 @@ const RESISTANCES: [u32; 16] = [
     120000, 42120, 64900, 21880
 ];
 
+const DIRECTIONS: [&str; 16] = [
+    "N", "NNE", "NE", "ENE",
+    "E", "ESE", "SE", "SSE",
+    "S", "SSW", "SW", "WSW",
+    "W", "WNW", "NW", "NNW"
+];
+
 fn find_direction_by_voltage(voltage: f32) -> f32 {
     let mut idx = 0;
     let mut min_diff = 999.0;
@@ -64,6 +71,10 @@ impl WindVaneData {
 
     pub fn get_direction(&self) -> f32 {
         self.direction
+    }
+
+    pub fn get_dir_as_string(&self) -> String {
+        DIRECTIONS[(self.get_direction() / 22.5) as usize].to_string()
     }
 }
 

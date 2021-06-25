@@ -45,6 +45,17 @@ const FIVE_BY_EIGHT_DOTS: u8 = 0x00;
 // Row offsets
 const ROW_OFFSETS: [u8; 4] = [ 0x00, 0x40, 0x14, 0x54 ];
 
+pub struct LCDAsciiConverter {}
+
+impl LCDAsciiConverter {
+    pub fn to_ascii(ch: char) -> u8 {
+        match ch {
+            '°' => 223,
+            _ => 63
+        }
+    }
+}
+
 pub struct LCDDisplay {
     rs: IoPin,
     en: IoPin,
@@ -113,10 +124,6 @@ impl LCDDisplay {
     pub fn write_message(&mut self, message: String) {
         let mut line = 0;
 
-        if !message.is_ascii() {
-            return;
-        }
-
         for char in message.chars() {
             if char == '\n' {
                 line += 1;
@@ -125,7 +132,7 @@ impl LCDDisplay {
 
                 self.set_cursor(col, line);
             } else {
-                self.write_bit(char as u8, true);
+                self.write_bit(if char.is_ascii() { char as u8 } else { LCDAsciiConverter::to_ascii(char) }, true);
             }
         }
     }

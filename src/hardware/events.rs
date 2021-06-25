@@ -2,9 +2,6 @@ use crate::data::process::{ DataPoint };
 
 #[derive(Debug, Clone, Copy)]
 pub enum EventType {
-    SensorRead,
-    ButtonPress,
-    ButtonRelease,
     UpdateData,
     AnemometerCount,
     RainCount,

@@ -1,11 +1,12 @@
 extern crate rppal;
 extern crate chrono;
 extern crate crossbeam_channel;
+extern crate sysinfo;
 
 mod hardware;
 mod data;
 
-use hardware::dht::{ DHT, DHTSensor };
+use hardware::dht::{ DHT };
 //use hardware::button::{ Button };
 use hardware::events::{ EventType };
 use hardware::anemometer::{ Anemometer };
@@ -16,14 +17,12 @@ use hardware::rain::{ RainMeter };
 use data::process::{ DataManager };
 
 use std::error::Error;
-use std::time::{ Duration };
-use std::thread::{ sleep };
 
 use rppal::gpio::{ Gpio, Mode };
 use rppal::spi::{ Bus, SlaveSelect, Mode as SPIMode };
 use crossbeam_channel as channel;
 
-const DHT_PIN: u8 = 14;
+const DHT_PIN: u8 = 4;
 const ANEMOMETER_PIN: u8 = 5;
 const RAIN_PIN: u8 = 6;
 
@@ -33,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (payload_tx, payload_rx) = channel::unbounded();
 
     // Humidity and Temperature Init
-    let dht_sensor = DHT::new(Gpio::new()?.get(DHT_PIN)?.into_io(Mode::Input), DHTSensor::DHT11, tx.clone(), payload_tx.clone());
+    let dht_sensor = DHT::new(Gpio::new()?.get(DHT_PIN)?.into_io(Mode::Input), tx.clone(), payload_tx.clone());
     dht_sensor.start_reading();
 
     // let mut button = Button::new(Gpio::new()?.get(23)?.into_input(), tx.clone(), payload_tx.clone());
@@ -59,20 +58,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     loop { 
         if let Ok(event) = rx.try_recv() {
             match event.get_event_type() {
-                EventType::SensorRead => {
-                    // led_pin.set_high();
-                    sleep(Duration::from_millis(100));
-                    // led_pin.set_low();
-                },
-                EventType::ButtonPress => {
-                    // button.increment_counter();
-                    // button_led.set_high();
-                    sleep(Duration::from_millis(20));
-                },
-                EventType::ButtonRelease => {
-                    // button_led.set_low();
-                    sleep(Duration::from_millis(20));
-                },
                 EventType::AnemometerCount => {
                     anemometer.increment_counter();
                 },
@@ -88,8 +73,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 EventType::Exit => {
                     println!("Exiting program!");
                     break;
-                },
-                _ => {  }
+                }
             }
         }
     }

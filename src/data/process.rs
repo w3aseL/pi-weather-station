@@ -4,6 +4,7 @@ use std::thread::{ sleep, spawn };
 use std::time::{ Duration, SystemTime };
 use chrono::{ DateTime, Local };
 use chrono::offset::{ Utc };
+use sysinfo::{ ProcessorExt, System, SystemExt };
 
 use crate::hardware::events::{ Event, EventType, Payload };
 use crate::hardware::dht::{ DHTData };
@@ -12,9 +13,9 @@ use crate::hardware::vane::{ WindVaneData };
 use crate::hardware::rain::{ RainData };
 use crate::hardware::display::{ LCDDisplay };
 
-const DISPLAY_RS_PIN: u8 = 2;
-const DISPLAY_EN_PIN: u8 = 3;
-const DISPLAY_D_PINS: [u8; 4] = [ 4, 17, 27, 22 ];
+const DISPLAY_RS_PIN: u8 = 13;
+const DISPLAY_EN_PIN: u8 = 19;
+const DISPLAY_D_PINS: [u8; 4] = [ 12, 16, 20, 21 ];
 const DISPLAY_ROWS: usize = 2;
 const DISPLAY_COLS: usize = 16;
 
@@ -96,7 +97,7 @@ impl DataPoint {
         if data_str.len() > 0 { print!("{}", data_str); }
     }
 
-    pub fn print_data_lcd(&self, show_id: i32, lcd_display: &mut LCDDisplay) {
+    pub fn print_data_lcd(&self, show_id: i32, lcd_display: &mut LCDDisplay, system_info: &mut System) {
         lcd_display.clear();
         lcd_display.cursor_home();
 
@@ -108,14 +109,14 @@ impl DataPoint {
             },
             1 => {
                 if self.dht_data.is_valid() {
-                    lcd_display.write_message(format!("{:.1}F ({:.1}C)\n{}% Humidity", self.dht_data.get_temp_farenheit(), self.dht_data.get_temp_celsius(), self.dht_data.get_humidity()));
+                    lcd_display.write_message(format!("{:.1}°F ({:.1}°C)\n{:.1}% Humidity", self.dht_data.get_temp_farenheit(), self.dht_data.get_temp_celsius(), self.dht_data.get_humidity()));
                 } else {
                     lcd_display.write_message(format!("Temp/Humidity\nunavailable!"));
                 }
             },
             2 => {
                 if self.anemometer_data.is_valid() && self.directional_data.is_valid() {
-                    lcd_display.write_message(format!("{}deg dirTBD\n{:.1}mph {:.1}k/hr", self.directional_data.get_direction(), self.anemometer_data.get_mph(), self.anemometer_data.get_kph()));
+                    lcd_display.write_message(format!("{}° {}\n{:.1}mph {:.1}k/hr", self.directional_data.get_direction(), self.directional_data.get_dir_as_string(), self.anemometer_data.get_mph(), self.anemometer_data.get_kph()));
                 } else {
                     lcd_display.write_message(format!("Wind data\nunavailable!"));
                 }
@@ -128,7 +129,9 @@ impl DataPoint {
                 }
             },
             4 => {
-                lcd_display.write_message(format!("TBD\nTBD"));
+                system_info.refresh_system();
+
+                lcd_display.write_message(format!("CPU: {:.1}%\nMem: {:.2}MB", system_info.get_global_processor_info().get_cpu_usage(), (system_info.get_used_memory() as f32) / 1000.0));
             },
             _ => {  }
         }
@@ -139,7 +142,8 @@ pub struct DataManager {
     sender: Sender<Event>,
     receiver: Receiver<Box<dyn Payload>>,
     data: DataPoint,
-    lcd_display: LCDDisplay
+    lcd_display: LCDDisplay,
+    system_info: System
 }
 
 impl DataManager {
@@ -148,7 +152,8 @@ impl DataManager {
             sender,
             receiver,
             data: DataPoint::new(),
-            lcd_display: LCDDisplay::new(DISPLAY_RS_PIN, DISPLAY_EN_PIN, DISPLAY_D_PINS, DISPLAY_COLS, DISPLAY_ROWS)?
+            lcd_display: LCDDisplay::new(DISPLAY_RS_PIN, DISPLAY_EN_PIN, DISPLAY_D_PINS, DISPLAY_COLS, DISPLAY_ROWS)?,
+            system_info: System::new_all()
         })
     }
 
@@ -181,9 +186,9 @@ impl DataManager {
 
                     let time = SystemTime::now();
 
-                    self.data.print_data_lcd(lcd_loop, &mut self.lcd_display);
+                    self.data.print_data_lcd(lcd_loop, &mut self.lcd_display, &mut self.system_info);
     
-                    lcd_loop = if lcd_loop == 3 { 0 } else { lcd_loop + 1 };
+                    lcd_loop = if lcd_loop == 4 { 0 } else { lcd_loop + 1 };
     
                     let elapsed = time.elapsed().unwrap();
     

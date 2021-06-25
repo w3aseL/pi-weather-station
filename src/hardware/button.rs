@@ -56,13 +56,15 @@ impl Button {
     }
 
     pub fn start(&mut self) {
+        /*
         let copy_sender = self.sender.clone();
 
-        self.pin.set_async_interrupt(Trigger::Both, move |level| {
+        self.pin.set_async_interrupt(Trigger::Both, move |_| {
             let event_type = if level == Level::Low { EventType::ButtonRelease } else { EventType::ButtonPress };
 
             copy_sender.send(Event::new(event_type)).unwrap();
         }).unwrap();
+        */
     }
 
     pub fn increment_counter(&mut self) {
