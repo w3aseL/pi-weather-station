@@ -1,9 +1,10 @@
 use rppal::gpio::{ InputPin, Trigger };
 use std::time::{ SystemTime };
 use crossbeam_channel::{ Sender };
+use job_scheduler::{ Job };
 
 use super::events::{ Payload, Event, EventType };
-use crate::data::process::{ DataPoint };
+use crate::data::process::{ DataPoint, DaytimeData };
 
 const COUNT_TO_MM: f32 = 0.2794;
 const CM_TO_MM: f32 = 10.0;
@@ -11,13 +12,15 @@ const CM_TO_IN: f32 = 2.54;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RainData {
+    total_ticks: u32,
     ticks_per_sec: f32,
     last_updated: Option<SystemTime>
 }
 
 impl RainData {
-    pub fn new(ticks_per_sec: f32, last_updated: Option<SystemTime>) -> Self {
+    pub fn new(total_ticks: u32, ticks_per_sec: f32, last_updated: Option<SystemTime>) -> Self {
         Self {
+            total_ticks,
             ticks_per_sec,
             last_updated
         }
@@ -38,6 +41,22 @@ impl RainData {
     pub fn get_amount_in(&self) -> f32 {
         self.get_amount_cm() / CM_TO_IN
     }
+
+    pub fn count_to_cm(&self) -> f32 {
+        (self.total_ticks as f32 / COUNT_TO_MM) / CM_TO_MM 
+    }
+
+    pub fn count_to_in(&self) -> f32 {
+        self.count_to_cm() / CM_TO_IN
+    }
+
+    pub fn convert_to_cm(count: u32) -> f32 {
+        (count as f32 / COUNT_TO_MM) / CM_TO_MM
+    }
+
+    pub fn convert_to_in(count: u32) -> f32 {
+        Self::convert_to_cm(count) / CM_TO_IN
+    }
 }
 
 pub struct RainPayload {
@@ -45,9 +64,9 @@ pub struct RainPayload {
 }
 
 impl RainPayload {
-    pub fn new(ticks_per_sec: f32, last_updated: Option<SystemTime>) -> Self {
+    pub fn new(total_ticks: u32, ticks_per_sec: f32, last_updated: Option<SystemTime>) -> Self {
         Self {
-            data: RainData::new(ticks_per_sec, last_updated)
+            data: RainData::new(total_ticks, ticks_per_sec, last_updated)
         }
     }
 }
@@ -57,7 +76,8 @@ impl Payload for RainPayload {
         // ...
     }
 
-    fn update_data_fields(&self, data: &mut DataPoint) {
+    fn update_data_fields(&self, data: &mut DataPoint, daytime_info: &mut DaytimeData) {
+        daytime_info.rain_total += self.data.total_ticks;
         data.update_rain(self.data.clone());
     }
 }
@@ -98,10 +118,11 @@ impl RainMeter {
     pub fn update_data(&mut self) {
         let time_elapsed = self.last_updated.elapsed().unwrap().as_millis();
 
+        let total_count = self.counter as u32;
         self.ticks_per_sec = self.counter as f32 / (time_elapsed as f32 / 1000.0);
         self.counter = 0;
         self.last_updated = SystemTime::now();
 
-        self.payload_sender.send(Box::new(RainPayload::new(self.ticks_per_sec, Some(self.last_updated)))).unwrap();
+        self.payload_sender.send(Box::new(RainPayload::new(total_count, self.ticks_per_sec, Some(self.last_updated)))).unwrap();
     }
 }

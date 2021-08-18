@@ -3,7 +3,7 @@ use crossbeam_channel::{ Sender };
 
 use super::events::{ Payload };
 use super::analog::{ MCP3008 };
-use crate::data::process::{ DataPoint };
+use crate::data::process::{ DataPoint, DaytimeData };
 
 const BUFFER_SIZE: usize = 16;
 const INPUT_VOLTAGE: f32 = 3.3;
@@ -95,7 +95,7 @@ impl Payload for WindVanePayload {
         // ...
     }
 
-    fn update_data_fields(&self, data: &mut DataPoint) {
+    fn update_data_fields(&self, data: &mut DataPoint, daytime_info: &mut DaytimeData) {
         data.update_direction(self.data.clone())
     }
 }

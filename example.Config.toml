@@ -1,0 +1,13 @@
+env = ''
+
+[dev]
+addr = ''
+username = ''
+password = ''
+dbname=''
+
+[prod]
+addr = ''
+username = ''
+password = ''
+dbname=''

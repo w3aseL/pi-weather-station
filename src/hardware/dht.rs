@@ -10,7 +10,7 @@ use chrono::{ DateTime };
 use chrono::offset::{ Utc };
 
 use crate::hardware::events::{ Event, EventType, Payload };
-use crate::data::process::{ DataPoint };
+use crate::data::process::{ DataPoint, DaytimeData };
 
 const MAX_CLOCKS: u32 = 32_000;
 
@@ -49,6 +49,10 @@ impl DHTData {
     pub fn get_last_updated(&self) -> Option<SystemTime> {
         self.last_updated
     }
+
+    pub fn convert_temp_to_farenheit(temp_c: f32) -> f32 {
+        temp_c * 9.0 / 5.0 + 32.0
+    }
 }
 
 pub struct DHTPayload {
@@ -68,7 +72,20 @@ impl Payload for DHTPayload {
         // ...
     }
 
-    fn update_data_fields(&self, data: &mut DataPoint) {
+    fn update_data_fields(&self, data: &mut DataPoint, daytime_info: &mut DaytimeData) {
+        daytime_info.temp_col_count += 1;
+        daytime_info.temp_total += self.data.temperature;
+        
+        if daytime_info.temp_lo < 0.0 || daytime_info.temp_lo > self.data.temperature {
+            daytime_info.temp_lo = self.data.temperature;
+        }
+
+        if daytime_info.temp_hi < self.data.temperature {
+            daytime_info.temp_hi = self.data.temperature;
+        }
+
+        daytime_info.temp_avg = daytime_info.temp_total / daytime_info.temp_col_count as f32;
+
         data.update_dht(self.data.clone())
     }
 }
@@ -122,49 +139,20 @@ impl DHT {
         }
     }
 
-    pub fn start_reading(mut self) {
-        self.pin.set_pullupdown(PullUpDown::Off);
+    pub fn update_data(&mut self) {
+        match self.update() {
+            Ok(_) => {
+                //println!("Temperature: {}°F ({}°C)", self.get_temp_farenheit(), self.get_temp_celsius());
+                //println!("Humidity: {}%", self.get_humidity());
 
-        spawn(move || {
-            let mut success_counter = 0; let mut error_counter = 0;
+                self.last_update = Some(SystemTime::now());
 
-            loop {
-                match self.update() {
-                    Ok(_) => {
-                        //println!("Temperature: {}°F ({}°C)", self.get_temp_farenheit(), self.get_temp_celsius());
-                        //println!("Humidity: {}%", self.get_humidity());
-                        success_counter += 1;
-
-                        self.last_update = Some(SystemTime::now());
-
-                        self.payload_sender.send(Box::new(DHTPayload::new(self.temp, self.humidity, self.last_update))).unwrap();
-                    }
-                    Err(code) => {
-                        println!("Failed to read from sensor! Code: {}", DHTState::get_state_str(DHTState::get_state_from_code(code)));
-                        error_counter += 1;
-                    }
-                }
-
-                if success_counter + error_counter == 20 {
-                    let mut last_update_str = "N/A".to_string();
-
-                    if let Some(time) = self.last_update {
-                        let date_time: DateTime<Utc> = time.into();
-
-                        last_update_str = date_time.format("%d/%m/%Y %T").to_string();
-                    }
-
-                    println!("DHT11 Test:\nSuccess: {}\nError: {}\nLast Update: {}", success_counter, error_counter, last_update_str);
-                    break;
-                }
-
-                sleep(Duration::from_secs(2));
+                self.payload_sender.send(Box::new(DHTPayload::new(self.temp, self.humidity, self.last_update))).unwrap();
             }
-
-            sleep(Duration::from_secs(10));
-
-            self.event_sender.send(Event::new(EventType::Exit)).unwrap();
-        });
+            Err(code) => {
+                println!("Failed to read from sensor! Code: {}", DHTState::get_state_str(DHTState::get_state_from_code(code)));
+            }
+        }
     }
 
     fn update(&mut self) -> Result<(), i32> {

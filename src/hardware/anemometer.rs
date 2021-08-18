@@ -3,7 +3,7 @@ use std::time::{ SystemTime };
 use crossbeam_channel::{ Sender };
 
 use super::events::{ Event, Payload, EventType };
-use crate::data::process::{ DataPoint };
+use crate::data::process::{ DataPoint, DaytimeData };
 
 const CM_TO_KM: f32 = 100000.0;
 const SEC_TO_HR: f32 = 3600.0;
@@ -43,6 +43,14 @@ impl AnemometerData {
     pub fn get_mph(&self) -> f32 {
         self.get_kph() / KM_TO_MI
     }
+
+    pub fn convert_to_kph(spins: f32) -> f32 {
+        (spins / 2.0) * ((2.0 * std::f32::consts::PI) * 9.0)
+    }
+
+    pub fn convert_to_mph(spins: f32) -> f32 {
+        Self::convert_to_kph(spins) / KM_TO_MI
+    }
 }
 
 pub struct AnemometerPayload {
@@ -62,7 +70,15 @@ impl Payload for AnemometerPayload {
         // ...
     }
 
-    fn update_data_fields(&self, data: &mut DataPoint) {
+    fn update_data_fields(&self, data: &mut DataPoint, daytime_info: &mut DaytimeData) {
+        if daytime_info.wind_min < 0.0 || daytime_info.wind_min > self.data.spins_per_sec {
+            daytime_info.wind_min = self.data.spins_per_sec;
+        }
+
+        if daytime_info.wind_max < self.data.spins_per_sec {
+            daytime_info.wind_max = self.data.spins_per_sec;
+        }
+
         data.update_anemometer(self.data.clone());
     }
 }
