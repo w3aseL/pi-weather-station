@@ -48,7 +48,7 @@ impl DatabaseType for Rain {
 }
 
 // https://serde.rs/custom-date-format.html
-mod dt_format {
+pub mod dt_format {
     use chrono::{DateTime, Utc, TimeZone};
     use serde::{self, Deserialize, Serializer, Deserializer};
 
@@ -90,7 +90,7 @@ mod dt_format {
     }
 }
 
-mod date_format {
+pub mod date_format {
     use chrono::{TimeZone, Date, Local, NaiveDate};
     use serde::{self, Deserialize, Serializer, Deserializer};
 

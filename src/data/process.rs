@@ -16,6 +16,8 @@ use crate::hardware::vane::{ WindVaneData };
 use crate::hardware::rain::{ RainData };
 use crate::hardware::display::{ LCDDisplay };
 
+use crate::api::cache::{ update_api_cache };
+
 use super::DatabaseType;
 use super::types::{ Rain };
 
@@ -57,6 +59,22 @@ impl DataPoint {
 
     pub fn update_rain(&mut self, data: RainData) {
         self.rain_data = data;
+    }
+
+    pub fn get_anemometer_data(&self) -> AnemometerData {
+        self.anemometer_data.clone()
+    }
+
+    pub fn get_directional_data(&self) -> WindVaneData {
+        self.directional_data.clone()
+    }
+
+    pub fn get_rain_data(&self) -> RainData {
+        self.rain_data.clone()
+    }
+
+    pub fn get_temp_data(&self) -> DHTData {
+        self.dht_data.clone()
     }
 
     pub fn print_data(&self) {
@@ -236,7 +254,11 @@ impl DataManager {
                     }
                 }
 
-                if has_updated { self.data.print_data(); }
+                if has_updated {
+                    self.data.print_data();
+
+                    update_api_cache(Some(self.current_data.clone()), Some(self.data.clone()));
+                }
 
                 let mut elapsed = Duration::from_secs(0);
 

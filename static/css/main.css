@@ -3,6 +3,11 @@
 	height: auto;
 }
 
+h1 p, h2 p, h3 p, h4 p, h5 p, h6 p {
+	display: inline-block;
+	margin-bottom: 0;
+}
+
 @media only screen and (max-width: 768px) {
 	.logo {
 		margin-left: auto;

@@ -53,7 +53,7 @@ const RAIN_PIN: u8 = 6;
 
 #[tokio::main]
 async fn tokio_main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    let socket_addr = format!("0.0.0.0:{}", if CONFIG.is_prod_env() { 80u16 } else { 3000u16 }).parse::<SocketAddr>().unwrap();
+    let socket_addr = format!("0.0.0.0:{}", if CONFIG.is_prod_env() { 8080u16 } else { 3000u16 }).parse::<SocketAddr>().unwrap();
 
     let service = make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(api_service)) }); 
     
